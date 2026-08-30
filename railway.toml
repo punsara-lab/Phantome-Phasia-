@@ -1,0 +1,9 @@
+# railway.toml — PHANTOM Railway Deployment
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "node src/index.js"
+restartPolicyType = "on_failure"
+healthcheckPath = "/health"
+healthcheckTimeout = 30

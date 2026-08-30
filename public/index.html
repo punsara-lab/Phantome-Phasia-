@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PHANTOM</title>
+<script src="/socket.io/socket.io.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#06060f;--surface:#0c0c1a;--panel:#10102a;--panel2:#131326;
+  --border:rgba(99,102,241,.15);--border2:rgba(99,102,241,.3);
+  --accent:#6366f1;--accent2:#818cf8;--accent3:#a78bfa;
+  --green:#10b981;--red:#ef4444;--amber:#f59e0b;--cyan:#22d3ee;
+  --text:#e2e8f0;--muted:#64748b;--dim:#1a1a2e;
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px}
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* HEADER */
+#hdr{flex:0 0 50px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;z-index:10}
+.logo{font-family:var(--mono);font-size:14px;font-weight:700;color:#fff;letter-spacing:3px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#nav-tabs{display:flex;gap:1px;margin-left:4px}
+.nav-tab{padding:5px 13px;border-radius:5px;font-size:12px;font-weight:500;cursor:pointer;color:var(--muted);border:none;background:none;transition:all .15s;white-space:nowrap}
+.nav-tab:hover,.nav-tab.active{background:var(--dim);color:var(--text)}
+.nav-tab.active{color:var(--accent2)}
+.hdr-r{display:flex;gap:7px;margin-left:auto;align-items:center;flex-shrink:0}
+.chip{background:var(--dim);border:1px solid var(--border);border-radius:5px;padding:3px 9px;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.chip span{color:var(--text)}
+#conn-badge{padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;border:1px solid;white-space:nowrap;cursor:default}
+.connected{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.3)!important;color:var(--green)}
+.disconnected{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3)!important;color:var(--red)}
+#away-badge{padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;border:1px solid;transition:all .2s}
+.away-on{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.4)!important;color:var(--amber)}
+.away-off{background:var(--dim);border-color:var(--border)!important;color:var(--muted)}
+
+/* BODY */
+#body{flex:1;min-height:0;overflow:hidden;position:relative}
+.view{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
+.view.active{display:flex}
+#view-chat{flex-direction:row!important}
+
+/* SIDEBAR */
+#side{flex:0 0 255px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.side-top{flex:0 0 auto;padding:8px 10px;border-bottom:1px solid var(--border)}
+.side-search{background:var(--dim);border:1px solid var(--border);border-radius:7px;padding:6px 10px;display:flex;align-items:center;gap:6px}
+.side-search input{background:none;border:none;color:var(--text);font-size:12px;width:100%;outline:none}
+.side-search input::placeholder{color:var(--muted)}
+#contact-list{flex:1;overflow-y:auto}
+.contact-item{display:flex;align-items:center;gap:9px;padding:8px 10px;cursor:pointer;transition:background .1s;border-left:2px solid transparent;position:relative}
+.contact-item:hover{background:rgba(99,102,241,.06)}
+.contact-item.active{background:rgba(99,102,241,.1);border-left-color:var(--accent)}
+.c-av{width:33px;height:33px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent3));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;text-transform:uppercase}
+.contact-item.group .c-av{border-radius:7px}
+.c-meta{flex:1;min-width:0}
+.c-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.c-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+.b-del{background:rgba(239,68,68,.15);color:var(--red);font-size:9px;padding:1px 4px;border-radius:3px;font-family:var(--mono)}
+.b-ai{background:rgba(99,102,241,.2);color:var(--accent2);font-size:9px;padding:1px 4px;border-radius:3px}
+.no-contacts{padding:40px 16px;text-align:center;color:var(--muted);font-size:12px;line-height:1.8}
+
+/* CHAT CENTER */
+#chat-area{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+#chat-hdr{flex:0 0 50px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px}
+#chat-name{font-weight:600;font-size:14px}
+#chat-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.chat-acts{margin-left:auto;display:flex;gap:5px}
+.ic-btn{background:var(--dim);border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;padding:4px 7px;font-size:12px;transition:all .15s}
+.ic-btn:hover{color:var(--text);border-color:var(--border2)}
+#msg-list{flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:3px}
+#no-chat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted)}
+#no-chat .icon{font-size:42px;opacity:.2}
+
+/* MESSAGES */
+.day-div{text-align:center;margin:10px 0;font-size:11px;color:var(--muted);position:relative}
+.day-div::before,.day-div::after{content:'';position:absolute;top:50%;width:calc(50% - 50px);height:1px;background:var(--border)}
+.day-div::before{left:0}.day-div::after{right:0}
+.msg{display:flex;flex-direction:column;max-width:70%;padding:7px 11px;border-radius:10px;animation:fi .18s ease}
+@keyframes fi{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.msg.me{align-self:flex-end;background:rgba(99,102,241,.14);border:1px solid rgba(99,102,241,.22);border-bottom-right-radius:2px}
+.msg.them{align-self:flex-start;background:var(--panel);border:1px solid var(--border);border-bottom-left-radius:2px}
+.msg.del-msg{background:rgba(239,68,68,.06)!important;border-color:rgba(239,68,68,.18)!important;opacity:.7}
+.msg-body{font-size:13px;line-height:1.55;word-break:break-word}
+.del-txt{color:var(--red);font-style:italic;font-size:12px}
+.msg-time{font-size:10px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+.msg-time.r{text-align:right}
+.del-tag{font-size:9px;background:rgba(239,68,68,.2);color:var(--red);padding:1px 4px;border-radius:3px;font-family:var(--mono);letter-spacing:.5px;display:inline-block;margin-bottom:3px}
+.msg-img{max-width:200px;max-height:160px;border-radius:7px;cursor:pointer;display:block;object-fit:cover}
+.msg-video video{max-width:200px;border-radius:7px}
+.msg-audio audio{width:190px}
+.msg-doc{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:7px;padding:7px 9px;cursor:pointer}
+.dl-link{font-size:10px;color:var(--accent2);cursor:pointer;margin-top:2px;text-decoration:underline}
+.msg-sticker{max-width:90px;border-radius:4px}
+
+/* CHAT INPUT */
+#chat-inp{flex:0 0 auto;padding:8px 14px;background:var(--surface);border-top:1px solid var(--border);display:flex;gap:7px;align-items:flex-end}
+#msg-in{flex:1;background:var(--dim);border:1px solid var(--border);border-radius:9px;padding:8px 11px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none;resize:none;max-height:90px;min-height:36px;line-height:1.4}
+#msg-in:focus{border-color:var(--accent)}
+#send-btn{background:var(--accent);border:none;border-radius:9px;color:#fff;cursor:pointer;padding:0 14px;font-size:13px;font-weight:600;height:36px;flex-shrink:0;transition:background .15s}
+#send-btn:hover{background:var(--accent2)}
+
+/* INTEL PANEL */
+#intel{flex:0 0 270px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#intel-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 6px;flex-shrink:0}
+.it{flex:1;padding:9px 4px;text-align:center;font-size:11px;font-weight:500;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s}
+.it.active{color:var(--accent2);border-bottom-color:var(--accent)}
+#intel-body{flex:1;overflow-y:auto;padding:10px}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:9px;text-align:center}
+.stat-n{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--accent2)}
+.stat-l{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+.sec-title{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px;display:flex;align-items:center;gap:5px}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.ev-item{display:flex;gap:7px;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px;align-items:center}
+.ev-item:last-child{border-bottom:none}
+.ev-tag{font-family:var(--mono);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;flex-shrink:0;text-transform:uppercase}
+.ev-m{background:rgba(99,102,241,.15);color:var(--accent2)}
+.ev-d{background:rgba(239,68,68,.15);color:var(--red)}
+.ev-c{background:rgba(16,185,129,.15);color:var(--green)}
+.ev-a{background:rgba(34,211,238,.1);color:var(--cyan)}
+.ev-desc{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.med-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.med-th{aspect-ratio:1;background:var(--dim);border-radius:5px;overflow:hidden;cursor:pointer;border:1px solid var(--border);position:relative}
+.med-th img,.med-th video{width:100%;height:100%;object-fit:cover}
+
+/* FULL VIEWS */
+.view-hdr{flex:0 0 auto;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface)}
+.view-hdr h2{font-size:15px;font-weight:600}
+.view-hdr p{font-size:12px;color:var(--muted);margin-top:2px}
+.view-bw{flex:1;overflow:hidden;display:flex;justify-content:center}
+.view-b{flex:1;overflow-y:auto;padding:18px;max-width:860px;width:100%}
+
+/* FORMS */
+.fg{margin-bottom:12px}
+.fl{font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:.5px}
+.fi,.fs,.ft{width:100%;background:var(--dim);border:1px solid var(--border);border-radius:7px;padding:7px 11px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none;transition:border-color .15s}
+.fi:focus,.fs:focus,.ft:focus{border-color:var(--accent)}
+.fs option{background:var(--panel)}
+.ft{resize:vertical;min-height:70px;line-height:1.5}
+.fhint{font-size:11px;color:var(--muted);margin-top:3px}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{padding:7px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.btn-p{background:var(--accent);color:#fff}.btn-p:hover{background:var(--accent2)}
+.btn-d{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}.btn-d:hover{background:rgba(239,68,68,.28)}
+.btn-sm{padding:3px 9px;font-size:11px}
+.btn-g{background:var(--dim);color:var(--muted);border:1px solid var(--border)}.btn-g:hover{color:var(--text)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:14px;margin-bottom:10px}
+.card-t{font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+
+/* Sched table */
+.stbl{width:100%;border-collapse:collapse;font-size:12px}
+.stbl th{text-align:left;padding:5px 7px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase}
+.stbl td{padding:7px;border-bottom:1px solid var(--border);vertical-align:middle}
+.stbl tr:last-child td{border-bottom:none}
+.ss{padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.ss-p{background:rgba(245,158,11,.15);color:var(--amber)}
+.ss-s{background:rgba(16,185,129,.15);color:var(--green)}
+.ss-f{background:rgba(239,68,68,.15);color:var(--red)}
+
+/* AI mode grid */
+.ai-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px}
+.ai-btn{background:var(--dim);border:1px solid var(--border);border-radius:7px;padding:9px 5px;text-align:center;cursor:pointer;transition:all .15s;font-size:12px;font-weight:500}
+.ai-btn.active{background:rgba(99,102,241,.15);border-color:var(--accent);color:var(--accent2)}
+.ai-btn:hover:not(.active){border-color:var(--border2)}
+.ai-icon{font-size:16px;display:block;margin-bottom:3px}
+
+/* Toggle */
+.tgl-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.tgl-sw{position:relative;width:38px;height:20px;cursor:pointer;flex-shrink:0}
+.tgl-sw input{opacity:0;width:0;height:0}
+.tgl-sl{position:absolute;inset:0;background:var(--dim);border-radius:20px;transition:.3s;border:1px solid var(--border)}
+.tgl-sl::before{content:'';position:absolute;width:14px;height:14px;left:2px;top:2px;background:var(--muted);border-radius:50%;transition:.3s}
+input:checked+.tgl-sl{background:rgba(245,158,11,.3);border-color:var(--amber)}
+input:checked+.tgl-sl::before{transform:translateX(18px);background:var(--amber)}
+
+/* Settings rows */
+.sr{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.sr:last-child{border-bottom:none}
+.sn{font-size:13px;font-weight:500}
+.sd{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* QR modal */
+#qr-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9000;display:none;align-items:center;justify-content:center}
+#qr-modal.show{display:flex}
+.qr-in{background:var(--panel);border:1px solid var(--border2);border-radius:14px;padding:28px;text-align:center;max-width:340px;width:100%}
+.qr-in h3{font-size:15px;font-weight:600;margin-bottom:5px}
+.qr-in p{font-size:12px;color:var(--muted);margin-bottom:18px}
+.qr-wrap{background:#fff;padding:14px;border-radius:10px;display:inline-block;margin-bottom:18px}
+
+/* Contact modal */
+#cm-modal{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:8000;display:none;align-items:center;justify-content:center}
+#cm-modal.show{display:flex}
+.cm-in{background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:22px;width:400px;max-width:95vw;max-height:80vh;overflow-y:auto}
+
+/* Toast */
+#toast{position:fixed;bottom:18px;right:18px;z-index:9999;display:flex;flex-direction:column;gap:7px;pointer-events:none}
+.toast-i{background:var(--panel);border:1px solid var(--border2);border-radius:7px;padding:9px 13px;font-size:13px;animation:ti .2s ease;max-width:260px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+@keyframes ti{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.toast-i.ok{border-color:rgba(16,185,129,.4);color:var(--green)}
+.toast-i.err{border-color:rgba(239,68,68,.4);color:var(--red)}
+.toast-i.inf{border-color:rgba(99,102,241,.4);color:var(--accent2)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:3px;height:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}::-webkit-scrollbar-thumb:hover{background:var(--border2)}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HEADER -->
+<div id="hdr">
+  <div class="logo"><span class="logo-dot"></span>PHANTOM</div>
+  <div id="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('chat')">Messages</button>
+    <button class="nav-tab" onclick="switchTab('scheduler')">Scheduler</button>
+    <button class="nav-tab" onclick="switchTab('ai')">AI Manager</button>
+    <button class="nav-tab" onclick="switchTab('settings')">Settings</button>
+  </div>
+  <div class="hdr-r">
+    <div class="chip" id="hdr-msgs">Msgs <span>—</span></div>
+    <div class="chip" id="hdr-del">Deleted <span>—</span></div>
+    <div class="chip" id="hdr-contacts">Contacts <span>—</span></div>
+    <div id="away-badge" class="away-off" onclick="toggleAwayQuick()">LIVE</div>
+    <div id="conn-badge" class="disconnected">● Connecting…</div>
+  </div>
+</div>
+
+<!-- BODY -->
+<div id="body">
+
+<!-- CHAT VIEW -->
+<div id="view-chat" class="view active">
+
+  <!-- Sidebar -->
+  <div id="side">
+    <div class="side-top">
+      <div class="side-search">
+        <span style="color:var(--muted);font-size:12px">🔍</span>
+        <input type="text" placeholder="Search contacts…" oninput="searchContacts(this.value)">
+      </div>
+    </div>
+    <div id="contact-list">
+      <div class="no-contacts" id="no-contacts">
+        Waiting for WhatsApp…<br>
+        <span style="font-size:11px">Scan QR to connect</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat middle -->
+  <div id="chat-area">
+    <div id="no-chat">
+      <div class="icon">◎</div>
+      <div style="font-size:13px">Select a contact</div>
+    </div>
+    <div id="active-chat" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0">
+      <div id="chat-hdr">
+        <div class="c-av" id="chat-av">?</div>
+        <div>
+          <div id="chat-name">—</div>
+          <div id="chat-sub">—</div>
+        </div>
+        <div class="chat-acts">
+          <button class="ic-btn" onclick="downloadChat('json')" title="Export JSON">⬇ JSON</button>
+          <button class="ic-btn" onclick="downloadChat('txt')"  title="Export TXT">⬇ TXT</button>
+          <button class="ic-btn" onclick="loadMedia()"          title="Media gallery">🖼</button>
+          <button class="ic-btn" onclick="openSearch()"         title="Search">🔍</button>
+          <button class="ic-btn" onclick="openCM()"             title="Contact settings">⚙</button>
+        </div>
+      </div>
+      <div id="msg-list"></div>
+      <div id="chat-inp">
+        <textarea id="msg-in" placeholder="Type a message… (Enter to send)" rows="1"
+          onkeydown="msgKey(event)" oninput="autoResize(this)"></textarea>
+        <button id="send-btn" onclick="sendMsg()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Intel panel -->
+  <div id="intel">
+    <div id="intel-tabs">
+      <div class="it active" onclick="switchIntel('stats')">Stats</div>
+      <div class="it" onclick="switchIntel('events')">Events</div>
+      <div class="it" onclick="switchIntel('media')">Media</div>
+    </div>
+    <div id="intel-body">
+      <div id="intel-stats">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-n" id="s-total">0</div><div class="stat-l">Messages</div></div>
+          <div class="stat-card"><div class="stat-n" id="s-today">0</div><div class="stat-l">Today</div></div>
+          <div class="stat-card"><div class="stat-n" id="s-del" style="color:var(--red)">0</div><div class="stat-l">Deleted</div></div>
+          <div class="stat-card"><div class="stat-n" id="s-media" style="color:var(--cyan)">0</div><div class="stat-l">Media</div></div>
+        </div>
+        <div class="sec-title">Live Feed</div>
+        <div id="live-feed"></div>
+        <div class="sec-title" style="margin-top:12px">AI</div>
+        <div id="intel-ai" style="font-size:12px;color:var(--muted)">—</div>
+      </div>
+      <div id="intel-events" style="display:none"><div id="events-list"></div></div>
+      <div id="intel-media" style="display:none"><div id="med-grid"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SCHEDULER VIEW -->
+<div id="view-scheduler" class="view">
+  <div class="view-hdr"><h2>Message Scheduler</h2><p>Send messages to one or multiple contacts at a scheduled time</p></div>
+  <div class="view-bw"><div class="view-b">
+    <div class="card">
+      <div class="card-t">New Scheduled Message</div>
+      <div class="fg">
+        <label class="fl">Phone Numbers (one per line)</label>
+        <textarea class="ft" id="sc-nums" placeholder="94771234567&#10;94711234567" style="min-height:60px"></textarea>
+        <div class="fhint">International format without +. Multiple numbers ok.</div>
+      </div>
+      <div class="fg">
+        <label class="fl">Or JID (e.g. 94771234567@s.whatsapp.net)</label>
+        <input type="text" class="fi" id="sc-jid" placeholder="Leave blank if using numbers above">
+      </div>
+      <div class="fg">
+        <label class="fl">Message</label>
+        <textarea class="ft" id="sc-body" placeholder="Your message…"></textarea>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="fl">Send At (one-time)</label>
+          <input type="datetime-local" class="fi" id="sc-dt">
+          <div class="fhint">Leave blank if using cron</div>
+        </div>
+        <div class="fg">
+          <label class="fl">Cron (recurring)</label>
+          <input type="text" class="fi" id="sc-cron" placeholder="0 9 * * *">
+          <div class="fhint">Overrides one-time if set</div>
+        </div>
+      </div>
+      <div class="fg" style="display:flex;align-items:center;gap:7px">
+        <input type="checkbox" id="sc-rep" style="accent-color:var(--accent)">
+        <label for="sc-rep" style="font-size:13px;cursor:pointer">Repeat (keep recurring)</label>
+      </div>
+      <button class="btn btn-p" onclick="scheduleMsg()">Schedule Message</button>
+    </div>
+    <div class="card">
+      <div class="card-t">Scheduled Messages <button class="btn btn-g btn-sm" onclick="loadSched()">↺ Refresh</button></div>
+      <div id="sched-list"><div style="color:var(--muted);font-size:12px">Loading…</div></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- AI VIEW -->
+<div id="view-ai" class="view">
+  <div class="view-hdr"><h2>AI Manager</h2><p>Status, auto-reply, per-contact personas</p></div>
+  <div class="view-bw"><div class="view-b">
+    <div class="card">
+      <div class="card-t">Your Status</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Set what you're doing — AI replies on your behalf</p>
+      <div class="tgl-row">
+        <div>
+          <div style="font-size:13px;font-weight:600">Away Mode</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Send fixed reply instead of AI</div>
+        </div>
+        <label class="tgl-sw"><input type="checkbox" id="away-toggle" onchange="setAway(this.checked)"><span class="tgl-sl"></span></label>
+      </div>
+      <div class="fg">
+        <label class="fl">Away Message</label>
+        <input type="text" class="fi" id="away-msg" placeholder="I'll reply soon!">
+      </div>
+      <div class="fg">
+        <label class="fl">Status Note (AI context)</label>
+        <textarea class="ft" id="status-note" placeholder="e.g. In a meeting until 3pm" style="min-height:70px"></textarea>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-p" onclick="saveStatus()">Save</button>
+        <button class="btn btn-g" onclick="clearStatus()">Clear</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-t">AI Provider</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Active: <span id="ai-mode-lbl" style="color:var(--accent2);font-family:var(--mono)">none</span> — set <code style="font-family:var(--mono);color:var(--muted)">AI_MODE</code> in Railway env</p>
+      <div class="ai-grid">
+        <div class="ai-btn" id="am-claude"><span class="ai-icon">◆</span>Claude</div>
+        <div class="ai-btn" id="am-openai"><span class="ai-icon">◈</span>OpenAI</div>
+        <div class="ai-btn" id="am-openrouter"><span class="ai-icon">⬡</span>OpenRouter</div>
+        <div class="ai-btn" id="am-gemini"><span class="ai-icon">◇</span>Gemini</div>
+        <div class="ai-btn" id="am-ollama"><span class="ai-icon">◉</span>Ollama</div>
+        <div class="ai-btn" id="am-none"><span class="ai-icon">○</span>Off</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">Set API key in Railway env vars. Auto-reply: <code style="font-family:var(--mono)">AI_AUTO_REPLY=on</code></div>
+    </div>
+    <div class="card">
+      <div class="card-t">Recent AI Replies <button class="btn btn-g btn-sm" onclick="loadAILogs()">↺</button></div>
+      <div id="ai-logs" style="font-size:12px"><div style="color:var(--muted)">Loading…</div></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- SETTINGS VIEW -->
+<div id="view-settings" class="view">
+  <div class="view-hdr"><h2>Settings</h2><p>Railway env variable reference</p></div>
+  <div class="view-bw"><div class="view-b">
+    <div class="card">
+      <div class="card-t" style="margin-bottom:12px">Environment Variables</div>
+      <div class="sr"><div><div class="sn" style="font-family:var(--mono)">WEB_SECRET</div><div class="sd">Dashboard password. Set to any strong string.</div></div></div>
+      <div class="sr"><div><div class="sn" style="font-family:var(--mono)">RAILWAY_VOLUME_MOUNT_PATH=/data</div><div class="sd">Mount a Volume at /data in Railway → persistent auth + DB</div></div></div>
+      <div class="sr"><div><div class="sn" style="font-family:var(--mono)">AI_MODE</div><div class="sd">claude | openai | openrouter | gemini | ollama | none</div></div></div>
+      <div class="sr"><div><div class="sn" style="font-family:var(--mono)">AI_AUTO_REPLY</div><div class="sd">on | off — auto-reply to incoming messages</div></div></div>
+      <div class="sr"><div><div class="sn" style="font-family:var(--mono)">STEALTH_MODE</div><div class="sd">true | false — hides online status</div></div></div>
+      <div class="sr"><div><div class="sn" style="font-family:var(--mono)">ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY</div><div class="sd">API key for chosen provider</div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-t" style="margin-bottom:10px">Cron Reference</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <tr style="color:var(--muted)"><th style="text-align:left;padding:4px 7px">Expression</th><th style="text-align:left;padding:4px 7px">Meaning</th></tr>
+        <tr><td style="padding:4px 7px;font-family:var(--mono);color:var(--accent2)">0 9 * * *</td><td style="padding:4px 7px;color:var(--muted)">9:00 AM every day</td></tr>
+        <tr><td style="padding:4px 7px;font-family:var(--mono);color:var(--accent2)">0 9 * * 1</td><td style="padding:4px 7px;color:var(--muted)">9:00 AM every Monday</td></tr>
+        <tr><td style="padding:4px 7px;font-family:var(--mono);color:var(--accent2)">*/30 * * * *</td><td style="padding:4px 7px;color:var(--muted)">Every 30 minutes</td></tr>
+        <tr><td style="padding:4px 7px;font-family:var(--mono);color:var(--accent2)">0 8,20 * * *</td><td style="padding:4px 7px;color:var(--muted)">8 AM and 8 PM daily</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-t" style="color:var(--red)">Danger Zone</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Permanent actions.</p>
+      <button class="btn btn-d" onclick="clearAllMemory()">Clear All AI Memory</button>
+    </div>
+  </div></div>
+</div>
+
+</div><!-- #body -->
+</div><!-- #app -->
+
+<!-- QR MODAL -->
+<div id="qr-modal">
+  <div class="qr-in">
+    <h3>Link WhatsApp</h3>
+    <p>WhatsApp → ⋮ → Linked Devices → Link a Device</p>
+    <div class="qr-wrap" id="qr-wrap">
+      <div style="width:220px;height:220px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">Loading…</div>
+    </div>
+    <div style="display:flex;gap:7px;justify-content:center;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" onclick="refreshQR()">↺ Refresh</button>
+      <a href="/qr" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Full page ↗</a>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--muted)">QR expires every ~30s — refresh if scan fails</div>
+  </div>
+</div>
+
+<!-- CONTACT MODAL -->
+<div id="cm-modal">
+  <div class="cm-in">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 id="cm-title" style="font-size:14px;font-weight:600">Contact</h3>
+      <button onclick="closeCM()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px">✕</button>
+    </div>
+    <div class="fg"><label class="fl">Name</label><input type="text" class="fi" id="cm-name"></div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="ft" id="cm-notes" style="min-height:50px"></textarea></div>
+    <div class="fg"><label class="fl">AI Persona (overrides default)</label><textarea class="ft" id="cm-persona" style="min-height:70px" placeholder="You are a casual friend…"></textarea></div>
+    <div class="fg" style="display:flex;align-items:center;gap:7px">
+      <input type="checkbox" id="cm-ai" style="accent-color:var(--accent)">
+      <label for="cm-ai" style="font-size:13px;cursor:pointer">Enable AI auto-reply for this contact</label>
+    </div>
+    <div style="display:flex;gap:7px;margin-top:8px">
+      <button class="btn btn-p" onclick="saveCM()">Save</button>
+      <button class="btn btn-g" onclick="closeCM()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── SOCKET.IO auto-connects — no manual config needed ──────────────────────
+// Socket.IO sends secret in auth header — server validates it automatically
+const _s = (typeof window.PHANTOM_SECRET !== 'undefined' && window.PHANTOM_SECRET) ? window.PHANTOM_SECRET : (new URLSearchParams(location.search).get('secret') || '');
+const socket = io({ transports: ['websocket', 'polling'], auth: { secret: _s } });
+
+// SECRET is injected by the server — no manual URL params needed ever
+const SECRET = (typeof window.PHANTOM_SECRET !== 'undefined' && window.PHANTOM_SECRET) ? window.PHANTOM_SECRET : (new URLSearchParams(location.search).get('secret') || '');
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let contacts      = [];
+let selectedJid   = null;
+let connected     = false;
+let aiStatus      = null;
+let qrTimer       = null;
+let qrStopped     = false;
+let intelTab      = 'stats';
+let cmJid         = null;
+
+// ── API ─────────────────────────────────────────────────────────────────────
+function ah() {
+  const h = { 'Content-Type': 'application/json' };
+  if (SECRET) h['x-phantom-secret'] = SECRET;
+  return h;
+}
+async function api(url, opts = {}) {
+  const r = await fetch(url, { headers: ah(), ...opts });
+  if (r.status === 401) { toast('Unauthorized — add ?secret=YOUR_SECRET to URL', 'err', 6000); throw new Error('401'); }
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// ── TOAST ───────────────────────────────────────────────────────────────────
+function toast(msg, type = 'inf', dur = 3000) {
+  const el = document.createElement('div');
+  el.className = `toast-i ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), dur);
+}
+
+// ── TAB SWITCHING ───────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.nav-tab').forEach((b, i) =>
+    b.classList.toggle('active', ['chat','scheduler','ai','settings'][i] === tab));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const ids = { chat:'view-chat', scheduler:'view-scheduler', ai:'view-ai', settings:'view-settings' };
+  document.getElementById(ids[tab]).classList.add('active');
+  if (tab === 'scheduler') loadSched();
+  if (tab === 'ai') { loadAIStatus(); loadAILogs(); }
+}
+
+function switchIntel(tab) {
+  intelTab = tab;
+  document.querySelectorAll('.it').forEach((b,i) => b.classList.toggle('active', ['stats','events','media'][i] === tab));
+  document.getElementById('intel-stats').style.display  = tab === 'stats'  ? 'block' : 'none';
+  document.getElementById('intel-events').style.display = tab === 'events' ? 'block' : 'none';
+  document.getElementById('intel-media').style.display  = tab === 'media'  ? 'block' : 'none';
+  if (tab === 'events') loadEvents();
+  if (tab === 'media')  loadIntelMedia();
+}
+
+// ── SOCKET EVENTS ───────────────────────────────────────────────────────────
+socket.on('connect',    () => console.log('WS connected'));
+socket.on('disconnect', () => console.log('WS disconnected'));
+
+socket.on('status', d => {
+  connected = d.connected;
+  updateConnBadge(d.connected);
+  if (d.connected) { closeQR(); toast('WhatsApp connected ✓', 'ok'); loadContacts(); }
+  else updateConnBadge(false);
+});
+
+socket.on('stats', d => updateStats(d));
+
+socket.on('message', d => {
+  addFeed('msg', d.contactName || d.jid?.split('@')[0] || '?', d.body || d.caption || `[${d.type}]`);
+  if (d.jid === selectedJid) appendMsg(d);
+  loadContacts();
+});
+
+socket.on('message_deleted', d => {
+  addFeed('del', d.jid?.split('@')[0] || '?', 'deleted');
+  markDeleted(d.id);
+});
+
+socket.on('ai_reply', d => addFeed('ai', d.jid?.split('@')[0] || '?', d.reply || ''));
+socket.on('qr', () => { if (!connected) openQR(); });
+
+// ── STATUS POLL (fallback if socket misses something) ──────────────────────
+async function pollStatus() {
+  try {
+    const d = await api('/api/status');
+    connected = d.connected;
+    updateConnBadge(d.connected);
+    if (d.stats) updateStats(d.stats);
+    if (d.aiStatus) updateAIUI(d.aiStatus);
+    if (d.aiMode) document.getElementById('ai-mode-lbl').textContent = d.aiMode;
+    if (!d.connected && d.hasQR && !qrStopped) openQR();
+    if (d.connected) closeQR();
+  } catch {}
+}
+
+function updateConnBadge(on) {
+  const b = document.getElementById('conn-badge');
+  b.className = on ? 'connected' : 'disconnected';
+  b.textContent = on ? '● Connected' : '● Disconnected';
+}
+
+function updateStats(s) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('hdr-msgs',     `Msgs `);    document.getElementById('hdr-msgs').innerHTML    = `Msgs <span>${s.totalMessages||0}</span>`;
+  document.getElementById('hdr-del').innerHTML      = `Deleted <span>${s.deletedMessages||0}</span>`;
+  document.getElementById('hdr-contacts').innerHTML = `Contacts <span>${s.totalContacts||0}</span>`;
+  set('s-total', s.totalMessages||0);
+  set('s-today', s.todayMessages||0);
+  set('s-del',   s.deletedMessages||0);
+  set('s-media', s.mediaMessages||0);
+}
+
+// ── CONTACTS ────────────────────────────────────────────────────────────────
+async function loadContacts(search = '') {
+  try {
+    contacts = await api(`/api/contacts?q=${encodeURIComponent(search)}`);
+    renderContacts();
+  } catch {}
+}
+
+function renderContacts() {
+  const el = document.getElementById('contact-list');
+  const nc = document.getElementById('no-contacts');
+  if (!contacts.length) { el.innerHTML = ''; el.appendChild(nc); nc.style.display = 'block'; return; }
+  nc.style.display = 'none';
+  el.innerHTML = contacts.map(c => {
+    const name = c.display_name || c.name || c.notify || c.phone || c.jid.split('@')[0];
+    return `<div class="contact-item${c.jid===selectedJid?' active':''}${c.is_group?' group':''}" onclick="selectContact('${esc(c.jid)}')">
+      <div class="c-av">${name.slice(0,2).toUpperCase()}</div>
+      <div class="c-meta">
+        <div class="c-name">${esh(name)}</div>
+        <div class="c-sub">${c.msg_count||0} msgs${c.deleted_count>0?' · '+c.deleted_count+' deleted':''}</div>
+      </div>
+      <div class="c-right">
+        ${c.deleted_count>0?`<span class="b-del">-${c.deleted_count}</span>`:''}
+        ${c.ai_enabled?`<span class="b-ai">AI</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function searchContacts(q) { loadContacts(q); }
+
+// ── CHAT ─────────────────────────────────────────────────────────────────────
+async function selectContact(jid) {
+  selectedJid = jid;
+  const c = contacts.find(x => x.jid === jid) || {};
+  const name = c.display_name||c.name||c.notify||c.phone||jid.split('@')[0];
+  document.getElementById('chat-av').textContent  = name.slice(0,2).toUpperCase();
+  document.getElementById('chat-name').textContent = name;
+  document.getElementById('chat-sub').textContent  = jid;
+  document.getElementById('no-chat').style.display = 'none';
+  const ac = document.getElementById('active-chat');
+  ac.style.display = 'flex';
+  renderContacts();
+  await loadMessages(jid);
+}
+
+async function loadMessages(jid) {
+  try {
+    const msgs = await api(`/api/messages/${encodeURIComponent(jid)}?limit=100`);
+    const list = document.getElementById('msg-list');
+    list.innerHTML = '';
+    if (!msgs.length) {
+      list.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:20px">No messages yet</div>';
+      return;
+    }
+    let lastDay = '';
+    msgs.forEach(m => {
+      const d = new Date(m.timestamp*1000).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+      if (d !== lastDay) {
+        const dv = document.createElement('div');
+        dv.className = 'day-div'; dv.textContent = d;
+        list.appendChild(dv); lastDay = d;
+      }
+      list.appendChild(buildMsg(m));
+    });
+    list.scrollTop = list.scrollHeight;
+  } catch(e) { console.error('loadMessages:', e); }
+}
+
+function buildMsg(m) {
+  const wrap = document.createElement('div');
+  wrap.className = `msg ${m.from_me?'me':'them'}${m.deleted?' del-msg':''}`;
+  wrap.dataset.id = m.id;
+
+  let c = '';
+  if (m.deleted) {
+    c = `<div class="del-tag">DELETED</div><div class="msg-body del-txt">🗑 ${esh(m.body||'This message was deleted')}</div>`;
+  } else if (m.type==='image' && m.media_path) {
+    const fn = m.media_path.split('/').pop();
+    c = `<div><img class="msg-img" src="/api/media/${fn}" loading="lazy" onclick="openFull('/api/media/${fn}','image')" onerror="this.style.display='none'">
+         <div class="dl-link" onclick="dlMedia('${fn}')">⬇ Download</div></div>`;
+    if (m.caption) c += `<div class="msg-body">${esh(m.caption)}</div>`;
+  } else if (m.type==='video' && m.media_path) {
+    const fn = m.media_path.split('/').pop();
+    c = `<div class="msg-video"><video controls src="/api/media/${fn}"></video>
+         <div class="dl-link" onclick="dlMedia('${fn}')">⬇ Download</div></div>`;
+  } else if (m.type==='audio' && m.media_path) {
+    const fn = m.media_path.split('/').pop();
+    c = `<div class="msg-audio"><audio controls src="/api/media/${fn}"></audio></div>`;
+  } else if (m.type==='document' && m.media_path) {
+    const fn = m.media_path.split('/').pop();
+    c = `<div class="msg-doc" onclick="dlMedia('${fn}')"><span style="font-size:18px">📄</span><span style="font-size:12px;word-break:break-all">${esh(fn)}</span></div>`;
+  } else if (m.type==='sticker' && m.media_path) {
+    const fn = m.media_path.split('/').pop();
+    c = `<img class="msg-sticker" src="/api/media/${fn}" loading="lazy">`;
+  } else if (m.type==='location') {
+    const [lat,lon] = (m.body||'0,0').split(',');
+    c = `<div>📍 <a href="https://maps.google.com/?q=${lat},${lon}" target="_blank" style="color:var(--cyan)">View location</a></div>`;
+  } else {
+    c = `<div class="msg-body">${esh(m.body||'')}</div>`;
+  }
+
+  const t = new Date(m.timestamp*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  wrap.innerHTML = c + `<div class="msg-time ${m.from_me?'r':''}">${t}</div>`;
+  return wrap;
+}
+
+function appendMsg(m) {
+  const list = document.getElementById('msg-list');
+  const empty = list.querySelector('[style*="No messages"]');
+  if (empty) empty.remove();
+  list.appendChild(buildMsg(m));
+  list.scrollTop = list.scrollHeight;
+}
+
+function markDeleted(id) {
+  const el = document.querySelector(`.msg[data-id="${id}"]`);
+  if (!el) return;
+  el.classList.add('del-msg');
+  const body = el.querySelector('.msg-body');
+  if (body) { body.classList.add('del-txt'); body.textContent = '🗑 This message was deleted'; }
+  if (!el.querySelector('.del-tag')) {
+    const t = document.createElement('div'); t.className='del-tag'; t.textContent='DELETED';
+    el.insertBefore(t, el.firstChild);
+  }
+}
+
+async function sendMsg() {
+  if (!selectedJid) return;
+  const inp = document.getElementById('msg-in');
+  const body = inp.value.trim();
+  if (!body) return;
+  inp.value = ''; inp.style.height = 'auto';
+  try {
+    socket.emit('send_msg', { jid: selectedJid, body });
+    // Optimistic: also call REST in case socket doesn't confirm
+    await api('/api/send', { method:'POST', body: JSON.stringify({ jid: selectedJid, body }) });
+    await loadMessages(selectedJid);
+  } catch(e) { toast('Send failed: ' + e.message, 'err'); }
+}
+
+function msgKey(e) { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,90)+'px'; }
+
+// ── DOWNLOAD CHAT ────────────────────────────────────────────────────────────
+function downloadChat(fmt) {
+  if (!selectedJid) return;
+  const url = `/api/export/${encodeURIComponent(selectedJid)}?format=${fmt}` + (SECRET ? `&secret=${SECRET}` : '');
+  const a = document.createElement('a'); a.href = url; a.download = ''; a.click();
+}
+
+// ── MEDIA ────────────────────────────────────────────────────────────────────
+function openFull(src, type) {
+  const w = window.open('','_blank');
+  w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh">
+    ${type==='image'?`<img src="${src}" style="max-width:100%;max-height:100%">`:
+    `<video src="${src}" controls autoplay style="max-width:100%;max-height:100%"></video>`}
+  </body></html>`);
+}
+function dlMedia(fn) {
+  const a = document.createElement('a');
+  a.href = `/api/media/${fn}/download` + (SECRET ? `?secret=${SECRET}` : '');
+  a.download = fn; a.click();
+}
+
+async function loadIntelMedia() {
+  const grid = document.getElementById('med-grid');
+  if (!selectedJid) { grid.innerHTML = '<div style="color:var(--muted);font-size:12px">Select a contact first</div>'; return; }
+  try {
+    const msgs = await api(`/api/messages/${encodeURIComponent(selectedJid)}?limit=200`);
+    const media = msgs.filter(m => ['image','video','sticker'].includes(m.type) && m.media_path && !m.deleted);
+    if (!media.length) { grid.innerHTML = '<div style="color:var(--muted);font-size:12px">No media</div>'; return; }
+    grid.innerHTML = `<div class="med-grid">${media.map(m => {
+      const fn = m.media_path.split('/').pop();
+      return `<div class="med-th" onclick="openFull('/api/media/${fn}','${m.type}')">
+        ${m.type==='video'?`<video src="/api/media/${fn}"></video>`:`<img src="/api/media/${fn}" loading="lazy">`}
+      </div>`;
+    }).join('')}</div>`;
+  } catch {}
+}
+
+function loadMedia() { switchIntel('media'); loadIntelMedia(); }
+
+function openSearch() {
+  const q = prompt('Search messages:');
+  if (!q) return;
+  api(`/api/search?q=${encodeURIComponent(q)}`).then(res => {
+    if (!res.length) { toast('No results', 'inf'); return; }
+    const list = document.getElementById('msg-list');
+    list.innerHTML = `<div style="text-align:center;font-size:12px;color:var(--muted);padding:8px">Results for "${esh(q)}" (${res.length}) — <span style="cursor:pointer;color:var(--accent2)" onclick="loadMessages('${esc(selectedJid)}')">clear</span></div>`;
+    res.forEach(m => list.appendChild(buildMsg(m)));
+  });
+}
+
+// ── LIVE FEED ─────────────────────────────────────────────────────────────────
+function addFeed(type, who, text) {
+  const feed = document.getElementById('live-feed');
+  const el = document.createElement('div');
+  el.className = 'ev-item';
+  const cls = { msg:'ev-m', del:'ev-d', ai:'ev-a' }[type] || 'ev-m';
+  const lbl = { msg:'MSG', del:'DEL', ai:'AI' }[type] || type.toUpperCase();
+  el.innerHTML = `<span class="ev-tag ${cls}">${lbl}</span><span class="ev-desc">${esh(who)}: ${esh(String(text).slice(0,40))}</span>`;
+  feed.insertBefore(el, feed.firstChild);
+  while (feed.children.length > 20) feed.lastChild.remove();
+}
+
+// ── EVENTS ────────────────────────────────────────────────────────────────────
+async function loadEvents() {
+  try {
+    const evts = await api('/api/events?limit=60');
+    const el = document.getElementById('events-list');
+    el.innerHTML = evts.map(e => {
+      const m = {message:['ev-m','MSG'],deleted:['ev-d','DEL'],connected:['ev-c','CON'],ai:['ev-a','AI']};
+      const [cls,lbl] = m[e.type] || ['ev-m',e.type.slice(0,3).toUpperCase()];
+      const t = new Date(e.created_at*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      return `<div class="ev-item"><span class="ev-tag ${cls}">${lbl}</span><span class="ev-desc">${esh(e.jid?.split('@')[0]||'')}</span><span style="color:var(--muted);font-size:10px;flex-shrink:0">${t}</span></div>`;
+    }).join('') || '<div style="color:var(--muted);font-size:12px">No events yet</div>';
+  } catch {}
+}
+
+// ── QR ────────────────────────────────────────────────────────────────────────
+function openQR() {
+  if (qrStopped) return;
+  document.getElementById('qr-modal').classList.add('show');
+  refreshQR();
+}
+function closeQR() {
+  qrStopped = true;
+  clearTimeout(qrTimer);
+  document.getElementById('qr-modal').classList.remove('show');
+}
+async function refreshQR() {
+  if (qrStopped) return;
+  try {
+    const s = await api('/api/status');
+    if (s.connected) { closeQR(); return; }
+    const d = await api('/api/qr');
+    const wrap = document.getElementById('qr-wrap');
+    wrap.innerHTML = d.qr
+      ? `<img src="${d.qr}" style="width:220px;height:220px;display:block">`
+      : `<div style="width:220px;height:220px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">Waiting for QR…<br><small>Check Railway logs</small></div>`;
+    qrTimer = setTimeout(refreshQR, 25000);
+  } catch { qrTimer = setTimeout(refreshQR, 5000); }
+}
+
+// ── SCHEDULER ─────────────────────────────────────────────────────────────────
+async function loadSched() {
+  try {
+    const list = await api('/api/scheduled');
+    const el = document.getElementById('sched-list');
+    if (!list.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">No scheduled messages</div>'; return; }
+    el.innerHTML = `<table class="stbl">
+      <tr><th>To</th><th>Message</th><th>When</th><th>Status</th><th></th></tr>
+      ${list.map(s => {
+        const when = s.cron_expr ? `⟳ ${s.cron_expr}` : s.send_at ? new Date(s.send_at*1000).toLocaleString() : '—';
+        const sc   = {pending:'ss-p',sent:'ss-s',failed:'ss-f'}[s.status]||'ss-p';
+        return `<tr>
+          <td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esh(s.jid)}">${esh(s.contact_name||s.jid.split('@')[0])}</td>
+          <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esh(s.body)}">${esh(s.body.slice(0,28))}${s.body.length>28?'…':''}</td>
+          <td style="font-family:var(--mono);font-size:11px;white-space:nowrap">${esh(when)}</td>
+          <td><span class="ss ${sc}">${s.status}</span></td>
+          <td><button class="btn btn-d btn-sm" onclick="delSched(${s.id})">✕</button></td>
+        </tr>`;
+      }).join('')}
+    </table>`;
+  } catch {}
+}
+
+async function scheduleMsg() {
+  const body = document.getElementById('sc-body').value.trim();
+  const nums = document.getElementById('sc-nums').value.trim();
+  const jid  = document.getElementById('sc-jid').value.trim();
+  const dt   = document.getElementById('sc-dt').value;
+  const cron = document.getElementById('sc-cron').value.trim();
+  const rep  = document.getElementById('sc-rep').checked;
+  if (!body) { toast('Message required', 'err'); return; }
+  if (!nums && !jid) { toast('Enter numbers or JID', 'err'); return; }
+  if (!dt && !cron) { toast('Set time or cron', 'err'); return; }
+  const payload = { body, cron_expr: cron||null, send_at: dt||null, repeat: rep };
+  if (nums) payload.numbers = nums.split('\n').map(n => n.trim().replace(/\D/g,'')).filter(Boolean);
+  else payload.jid = jid;
+  try {
+    await api('/api/scheduled', { method:'POST', body: JSON.stringify(payload) });
+    toast('Scheduled!', 'ok');
+    ['sc-body','sc-nums','sc-jid','sc-cron'].forEach(id => document.getElementById(id).value='');
+    document.getElementById('sc-dt').value='';
+    loadSched();
+  } catch(e) { toast('Failed: '+e.message, 'err'); }
+}
+
+async function delSched(id) {
+  if (!confirm('Delete this scheduled message?')) return;
+  try { await api(`/api/scheduled/${id}`,{method:'DELETE'}); loadSched(); toast('Deleted','inf'); }
+  catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+// ── AI MANAGER ────────────────────────────────────────────────────────────────
+async function loadAIStatus() {
+  try {
+    const s = await api('/api/ai/status');
+    updateAIUI(s);
+    const mode = document.getElementById('ai-mode-lbl').textContent;
+    document.querySelectorAll('.ai-btn').forEach(b => b.classList.toggle('active', b.id===`am-${mode}`));
+  } catch {}
+}
+
+function updateAIUI(s) {
+  aiStatus = s;
+  const away = !!s.is_away;
+  const badge = document.getElementById('away-badge');
+  badge.className = away ? 'away-on' : 'away-off';
+  badge.textContent = away ? 'AWAY' : 'LIVE';
+  const iai = document.getElementById('intel-ai');
+  if (iai) iai.innerHTML = `<span style="color:${away?'var(--amber)':'var(--green)'}">● ${away?'AWAY':'LIVE'}</span>${s.status_note?`<div style="color:var(--muted);margin-top:3px;font-size:11px">${esh(s.status_note)}</div>`:''}`;
+  const at = document.getElementById('away-toggle'); if (at) at.checked = away;
+  const am = document.getElementById('away-msg');   if (am && s.away_msg) am.value = s.away_msg;
+  const sn = document.getElementById('status-note');if (sn && s.status_note !== undefined) sn.value = s.status_note||'';
+}
+
+async function setAway(on) {
+  const msg = document.getElementById('away-msg')?.value || 'I am currently unavailable.';
+  try {
+    const r = await api('/api/ai/status',{method:'POST',body:JSON.stringify({is_away:on,away_msg:msg})});
+    updateAIUI(r.status);
+    toast(on?'Away mode ON':'Away mode OFF', on?'inf':'ok');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+async function toggleAwayQuick() {
+  if (!aiStatus) await pollStatus();
+  setAway(!aiStatus?.is_away);
+}
+
+async function saveStatus() {
+  const msg  = document.getElementById('away-msg').value.trim();
+  const note = document.getElementById('status-note').value.trim();
+  const away = document.getElementById('away-toggle').checked;
+  try {
+    const r = await api('/api/ai/status',{method:'POST',body:JSON.stringify({is_away:away,away_msg:msg||null,status_note:note||null})});
+    updateAIUI(r.status);
+    toast('Saved','ok');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+function clearStatus() {
+  document.getElementById('status-note').value='';
+  api('/api/ai/status',{method:'POST',body:JSON.stringify({status_note:''})}).then(()=>toast('Cleared','inf'));
+}
+
+async function loadAILogs() {
+  try {
+    const logs = await api('/api/ai/logs?limit=20');
+    const el = document.getElementById('ai-logs');
+    if (!logs.length) { el.innerHTML='<div style="color:var(--muted)">No AI logs yet</div>'; return; }
+    el.innerHTML = logs.map(l=>`
+      <div style="border-bottom:1px solid var(--border);padding:7px 0">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+          <span style="color:var(--muted)">${esh(l.jid?.split('@')[0])}</span>
+          <span style="color:var(--muted);font-size:10px;font-family:var(--mono)">${esh(l.model||'')}</span>
+        </div>
+        <div style="margin-bottom:2px">← ${esh((l.user_msg||'').slice(0,80))}</div>
+        <div style="color:var(--accent2)">→ ${esh((l.ai_reply||'').slice(0,80))}</div>
+      </div>`).join('');
+  } catch {}
+}
+
+// ── CONTACT MODAL ─────────────────────────────────────────────────────────────
+function openCM() {
+  if (!selectedJid) return;
+  cmJid = selectedJid;
+  const c = contacts.find(x=>x.jid===selectedJid)||{};
+  const name = c.display_name||c.name||c.notify||c.phone||selectedJid.split('@')[0];
+  document.getElementById('cm-title').textContent = `Settings — ${name}`;
+  document.getElementById('cm-name').value    = c.name||'';
+  document.getElementById('cm-notes').value   = c.notes||'';
+  document.getElementById('cm-persona').value = c.ai_persona||'';
+  document.getElementById('cm-ai').checked    = !!c.ai_enabled;
+  document.getElementById('cm-modal').classList.add('show');
+}
+function closeCM() { document.getElementById('cm-modal').classList.remove('show'); }
+async function saveCM() {
+  if (!cmJid) return;
+  const data = {
+    name:       document.getElementById('cm-name').value.trim()||null,
+    notes:      document.getElementById('cm-notes').value.trim()||null,
+    ai_persona: document.getElementById('cm-persona').value.trim()||null,
+    ai_enabled: document.getElementById('cm-ai').checked ? 1 : 0,
+  };
+  try {
+    await api(`/api/contacts/${encodeURIComponent(cmJid)}`,{method:'PATCH',body:JSON.stringify(data)});
+    toast('Saved','ok'); closeCM(); loadContacts();
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────────────────────
+async function clearAllMemory() {
+  if (!confirm('Clear all AI memory? Cannot be undone.')) return;
+  try { await api('/api/ai/memory/all',{method:'DELETE'}); toast('Memory cleared','inf'); } catch {}
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function esh(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return String(s||'').replace(/'/g,"\\'"); }
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  pollStatus();
+  loadContacts();
+  setInterval(pollStatus, 30000);
+  setInterval(() => { if (intelTab==='events') loadEvents(); }, 15000);
+});
+</script>
+</body>
+</html>

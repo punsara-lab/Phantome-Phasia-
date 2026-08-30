@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "python3", "gcc", "make", "pkg-config"]
+
+[phases.install]
+cmds = [
+  "npm ci --omit=optional",
+  "npm rebuild better-sqlite3 --build-from-source"
+]
+
+[start]
+cmd = "node src/index.js"

@@ -130,9 +130,8 @@ v4.1 is here because open source is important. But v6 Aurora represents hundreds
 v4.1 is MIT licensed — fork it, break it, fix it, learn from it.
 
 **v6 Aurora is available for purchase.**
-📧 Email: `your@email.com`
-💬 Telegram: `@yourhandle`
-🐦 Twitter: `@yourhandle`
+📧 Email: `hello.punsara@gmail.com
+💬 phone:+94774153113
 
 *Pricing and licensing details available on request. Bulk/org licenses available.*
 

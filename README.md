@@ -25,6 +25,8 @@ Phantome connects to WhatsApp Web, logs everything to a local SQLite database, a
 
 ---
 
+> Date started-2026.06.12
+
 ## Features
 
 | Feature | Description |
